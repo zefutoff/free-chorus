@@ -1,0 +1,6 @@
+ChorusPro=Chorus Pro
+ChorusProModuleDescription=Module d'intégration Chorus Pro pour Dolibarr
+ChorusProModuleDescriptionLong=Prépare l'envoi des factures Dolibarr vers Chorus Pro via un module externe.
+ChorusProSetup=Configuration Chorus Pro
+ChorusProSetupIntro=Cette page prépare la configuration du module. Les paramètres API seront ajoutés dans une prochaine étape.
+ChorusProNoSettingYet=Aucun paramètre Chorus Pro n'est encore disponible à enregistrer.

@@ -42,6 +42,7 @@ Licence recommandée : GPL-3.0-or-later, compatible avec l'écosystème Dolibarr
 
 Voir les fichiers suivants :
 
+- `CHANGELOG.md` (référence du changelog)
 - `PROJECT_BRIEF.md`
 - `ARCHITECTURE.md`
 - `API_CHORUSPRO.md`
