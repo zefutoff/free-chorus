@@ -220,3 +220,31 @@ Proposer plusieurs solutions.
 Expliquer les avantages et inconvénients.
 
 Attendre une validation avant de poursuivre.
+
+## Commits
+
+Les messages de commit doivent suivre la convention Conventional Commits.
+
+Types autorisés :
+
+- feat
+- fix
+- docs
+- refactor
+- test
+- perf
+- build
+- ci
+- chore
+- style
+
+Un commit doit représenter une seule évolution logique.
+
+Le message doit être rédigé en anglais.
+
+Exemples :
+
+feat: add Chorus Pro configuration page
+fix: prevent duplicate invoice submission
+docs: update installation guide
+refactor: extract OAuth client
