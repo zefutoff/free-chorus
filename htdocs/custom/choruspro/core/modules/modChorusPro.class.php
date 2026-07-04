@@ -28,7 +28,7 @@ class modChorusPro extends DolibarrModules
     public function __construct($db)
     {
         $this->db = $db;
-        $this->numero = 500000;
+        $this->numero = 104500;
         $this->rights_class = 'choruspro';
         $this->family = 'interface';
         $this->module_position = '90';
@@ -37,7 +37,7 @@ class modChorusPro extends DolibarrModules
         $this->descriptionlong = 'ChorusProModuleDescriptionLong';
         $this->editor_name = 'Free Chorus contributors';
         $this->editor_url = '';
-        $this->version = 'development';
+        $this->version = 'develop';
         $this->const_name = 'MAIN_MODULE_' . strtoupper($this->name);
         $this->picto = 'generic';
 
