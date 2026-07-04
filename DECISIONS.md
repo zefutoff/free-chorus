@@ -401,3 +401,23 @@ Deprecated
 ```
 
 en expliquant la nouvelle orientation.
+
+# AD-013
+
+## Intégration API incrémentale
+
+Toute nouvelle fonctionnalité utilisant une API externe doit être développée en couches :
+
+1. Authentification
+2. Lecture
+3. Écriture
+4. Synchronisation
+
+Aucune fonctionnalité ne doit implémenter plusieurs de ces couches dans une même évolution.
+
+### Raisons
+
+- simplifier le débogage ;
+- faciliter les tests ;
+- limiter les régressions ;
+- permettre des commits atomiques.
