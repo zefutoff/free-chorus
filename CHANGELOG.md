@@ -10,3 +10,4 @@ Le format suit l'esprit de Keep a Changelog et ce fichier racine est la référe
 
 - Initialisation du changelog de référence à la racine du dépôt.
 - Ajout du squelette initial du module Dolibarr Chorus Pro.
+- Ajout des permissions et constantes de configuration Chorus Pro.

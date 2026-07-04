@@ -64,12 +64,46 @@ class modChorusPro extends DolibarrModules
         $this->need_dolibarr_version = array(18, 0);
         $this->warnings_activation = array();
         $this->warnings_activation_ext = array();
-        $this->const = array();
+        $this->const = array(
+            array(0 => 'CHORUSPRO_ENV', 1 => 'chaine', 2 => 'sandbox', 3 => 'Chorus Pro environment', 4 => 0, 5 => 'current', 6 => 1),
+            array(0 => 'CHORUSPRO_CLIENT_ID', 1 => 'chaine', 2 => '', 3 => 'PISTE client identifier', 4 => 0, 5 => 'current', 6 => 1),
+            array(0 => 'CHORUSPRO_CLIENT_SECRET', 1 => 'chaine', 2 => '', 3 => 'PISTE client secret', 4 => 0, 5 => 'current', 6 => 1),
+            array(0 => 'CHORUSPRO_TECHNICAL_ACCOUNT', 1 => 'chaine', 2 => '', 3 => 'Chorus Pro technical account', 4 => 0, 5 => 'current', 6 => 1),
+            array(0 => 'CHORUSPRO_TECHNICAL_PASSWORD', 1 => 'chaine', 2 => '', 3 => 'Chorus Pro technical account password', 4 => 0, 5 => 'current', 6 => 1),
+            array(0 => 'CHORUSPRO_EMITTER_SIRET', 1 => 'chaine', 2 => '', 3 => 'Emitter SIRET', 4 => 0, 5 => 'current', 6 => 1),
+            array(0 => 'CHORUSPRO_DEBUG', 1 => 'yesno', 2 => '0', 3 => 'Enable Chorus Pro debug mode', 4 => 0, 5 => 'current', 6 => 1),
+            array(0 => 'CHORUSPRO_LOG_LEVEL', 1 => 'chaine', 2 => 'INFO', 3 => 'Chorus Pro log level', 4 => 0, 5 => 'current', 6 => 1),
+        );
         $this->tabs = array();
         $this->dictionaries = array();
         $this->boxes = array();
         $this->cronjobs = array();
         $this->rights = array();
+        $r = 0;
+
+        $this->rights[$r][0] = 500001;
+        $this->rights[$r][1] = 'ChorusProPermissionRead';
+        $this->rights[$r][4] = 'read';
+        $this->rights[$r][5] = 'read';
+        $r++;
+
+        $this->rights[$r][0] = 500002;
+        $this->rights[$r][1] = 'ChorusProPermissionSend';
+        $this->rights[$r][4] = 'send';
+        $this->rights[$r][5] = 'send';
+        $r++;
+
+        $this->rights[$r][0] = 500003;
+        $this->rights[$r][1] = 'ChorusProPermissionAdmin';
+        $this->rights[$r][4] = 'admin';
+        $this->rights[$r][5] = 'admin';
+        $r++;
+
+        $this->rights[$r][0] = 500004;
+        $this->rights[$r][1] = 'ChorusProPermissionLogs';
+        $this->rights[$r][4] = 'logs';
+        $this->rights[$r][5] = 'logs';
+
         $this->menus = array();
     }
 
