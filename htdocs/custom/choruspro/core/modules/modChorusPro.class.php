@@ -60,7 +60,7 @@ class modChorusPro extends DolibarrModules
         $this->depends = array();
         $this->requiredby = array();
         $this->conflictwith = array();
-        $this->phpmin = array(8, 2);
+        $this->phpmin = array(8, 0);
         $this->need_dolibarr_version = array(18, 0);
         $this->warnings_activation = array();
         $this->warnings_activation_ext = array();
