@@ -28,6 +28,8 @@ class ChorusProClient
     public const DEFAULT_SCOPE = 'openid';
     public const TOKEN_EXPIRATION_LEEWAY = 60;
     public const HTTP_TIMEOUT = 30;
+    public const OAUTH_HTTP_METHOD = 'POST';
+    public const OAUTH_CONTENT_TYPE = 'application/x-www-form-urlencoded';
     public const SANDBOX_TOKEN_URL = 'https://sandbox-oauth.piste.gouv.fr/api/oauth/token';
     public const PRODUCTION_TOKEN_URL = 'https://oauth.piste.gouv.fr/api/oauth/token';
 
@@ -132,6 +134,23 @@ class ChorusProClient
         }
 
         return max(0, $this->accessTokenExpiresAt - time());
+    }
+
+    /**
+     * Return safe OAuth diagnostic metadata without exposing secrets.
+     *
+     * @return array Safe diagnostic context
+     */
+    public function getOAuthDiagnosticContext()
+    {
+        return array(
+            'endpoint' => $this->getTokenUrl(),
+            'environment' => $this->getEnvironment(),
+            'method' => self::OAUTH_HTTP_METHOD,
+            'client_id_configured' => $this->getConfigValue('CHORUSPRO_CLIENT_ID') !== '',
+            'client_secret_configured' => $this->getConfigValue('CHORUSPRO_CLIENT_SECRET') !== '',
+            'content_type' => self::OAUTH_CONTENT_TYPE,
+        );
     }
 
     /**
@@ -306,8 +325,8 @@ class ChorusProClient
             $httpClient = array($this, 'executeHttpRequest');
         }
 
-        $response = call_user_func($httpClient, 'POST', $tokenUrl, array(
-            'Content-Type: application/x-www-form-urlencoded',
+        $response = call_user_func($httpClient, self::OAUTH_HTTP_METHOD, $tokenUrl, array(
+            'Content-Type: ' . self::OAUTH_CONTENT_TYPE,
         ), http_build_query($payload, '', '&'));
 
         return $this->decodeTokenResponse($response);
@@ -368,6 +387,11 @@ class ChorusProClient
         $body = isset($response['body']) ? (string) $response['body'] : '';
 
         if ($httpCode < 200 || $httpCode >= 300) {
+            $message = $this->extractOAuthErrorMessage($body);
+            if ($message !== '') {
+                throw new RuntimeException('PISTE OAuth authentication failed with HTTP status ' . $httpCode . ': ' . $message);
+            }
+
             throw new RuntimeException('PISTE OAuth authentication failed with HTTP status ' . $httpCode . '.');
         }
 
@@ -377,6 +401,46 @@ class ChorusProClient
         }
 
         return $decoded;
+    }
+
+    /**
+     * Extract a safe error message from a PISTE OAuth JSON error body.
+     *
+     * @param string $body HTTP response body
+     * @return string Safe error message or empty string
+     */
+    protected function extractOAuthErrorMessage($body)
+    {
+        $decoded = json_decode($body, true);
+        if (!is_array($decoded)) {
+            return '';
+        }
+
+        foreach (array('error_description', 'message', 'error') as $key) {
+            if (!empty($decoded[$key]) && is_scalar($decoded[$key])) {
+                return $this->sanitizeDiagnosticMessage((string) $decoded[$key]);
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Remove sensitive fragments from a diagnostic error message.
+     *
+     * @param string $message Raw message
+     * @return string Sanitized message
+     */
+    protected function sanitizeDiagnosticMessage($message)
+    {
+        $patterns = array(
+            '/client_secret=[^&\\s]*/i',
+            '/access_token=[^&\\s]*/i',
+            '/authorization:\\s*bearer\\s+[^\\s]+/i',
+            '/authorization:\\s*basic\\s+[^\\s]+/i',
+        );
+
+        return preg_replace($patterns, '********', $message);
     }
 
     /**
