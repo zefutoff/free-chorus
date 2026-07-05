@@ -121,6 +121,20 @@ class ChorusProClient
     }
 
     /**
+     * Return remaining lifetime for the cached OAuth access token.
+     *
+     * @return int Remaining lifetime in seconds
+     */
+    public function getAccessTokenExpiresIn()
+    {
+        if ($this->accessToken === '') {
+            return 0;
+        }
+
+        return max(0, $this->accessTokenExpiresAt - time());
+    }
+
+    /**
      * Execute a low-level Chorus Pro API call.
      *
      * @param string $method   HTTP method expected by the future endpoint
