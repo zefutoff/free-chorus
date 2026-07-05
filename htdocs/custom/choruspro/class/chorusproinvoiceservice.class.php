@@ -9,79 +9,95 @@
  */
 
 /**
- * \file       htdocs/custom/choruspro/class/chorusprolog.class.php
+ * \file       htdocs/custom/choruspro/class/chorusproinvoiceservice.class.php
  * \ingroup    choruspro
- * \brief      Log persistence skeleton for Chorus Pro.
+ * \brief      Business service skeleton for Chorus Pro invoice workflows.
  */
 
 /**
- * Encapsulates future Chorus Pro technical and functional log persistence.
+ * Coordinates future invoice validation, payload preparation and status sync.
  *
- * Secrets must be masked before any future data reaches this class.
+ * This service must remain free of HTML and direct HTTP calls. Network access
+ * will be delegated to ChorusProClient once the API integration phase starts.
  */
-class ChorusProLog
+class ChorusProInvoiceService
 {
-    public const LEVEL_INFO = 'INFO';
-    public const LEVEL_WARNING = 'WARNING';
-    public const LEVEL_ERROR = 'ERROR';
+    /**
+     * Future Chorus Pro API client.
+     *
+     * @var ChorusProClient|null
+     */
+    protected $client;
 
     /**
-     * Database handler.
+     * Future submission repository.
      *
-     * @var DoliDB|null
+     * @var ChorusProSubmission|null
      */
-    protected $db;
+    protected $submission;
 
     /**
-     * Database table name without Dolibarr prefix substitution.
+     * Future technical logger.
      *
-     * @var string
+     * @var ChorusProLog|null
      */
-    public $tableElement = 'choruspro_log';
+    protected $log;
 
     /**
      * Constructor.
      *
-     * @param DoliDB|null $db Database handler
+     * @param ChorusProClient|null     $client     API client
+     * @param ChorusProSubmission|null $submission Submission persistence helper
+     * @param ChorusProLog|null        $log        Log persistence helper
      */
-    public function __construct($db = null)
+    public function __construct($client = null, $submission = null, $log = null)
     {
-        $this->db = $db;
+        $this->client = $client;
+        $this->submission = $submission;
+        $this->log = $log;
     }
 
     /**
-     * Add an informational log entry.
+     * Validate whether a Dolibarr invoice can be prepared for Chorus Pro.
      *
-     * @param string $message Log message without secrets
-     * @param array  $context Optional structured context
-     * @return int Created row identifier
+     * @param Facture|object $invoice Dolibarr invoice object
+     * @return array Validation result
      */
-    public function addInfo($message, array $context = array())
+    public function validateInvoice($invoice)
     {
-        throw new BadMethodCallException('Chorus Pro info logging is not implemented yet.');
+        throw new BadMethodCallException('Chorus Pro invoice validation is not implemented yet.');
     }
 
     /**
-     * Add a warning log entry.
+     * Prepare the payload expected by the future Chorus Pro submission call.
      *
-     * @param string $message Log message without secrets
-     * @param array  $context Optional structured context
-     * @return int Created row identifier
+     * @param Facture|object $invoice Dolibarr invoice object
+     * @return array Prepared payload
      */
-    public function addWarning($message, array $context = array())
+    public function preparePayload($invoice)
     {
-        throw new BadMethodCallException('Chorus Pro warning logging is not implemented yet.');
+        throw new BadMethodCallException('Chorus Pro payload preparation is not implemented yet.');
     }
 
     /**
-     * Add an error log entry.
+     * Submit an invoice through the future Chorus Pro workflow.
      *
-     * @param string $message Log message without secrets
-     * @param array  $context Optional structured context
-     * @return int Created row identifier
+     * @param Facture|object $invoice Dolibarr invoice object
+     * @return array Submission result
      */
-    public function addError($message, array $context = array())
+    public function submitInvoice($invoice)
     {
-        throw new BadMethodCallException('Chorus Pro error logging is not implemented yet.');
+        throw new BadMethodCallException('Chorus Pro invoice submission workflow is not implemented yet.');
+    }
+
+    /**
+     * Synchronize the local status of an already submitted invoice.
+     *
+     * @param ChorusProSubmission|array|object $submission Submission data or object
+     * @return array Synchronization result
+     */
+    public function syncInvoiceStatus($submission)
+    {
+        throw new BadMethodCallException('Chorus Pro status synchronization is not implemented yet.');
     }
 }
