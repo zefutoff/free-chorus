@@ -9,5 +9,6 @@ Ce dossier contient le squelette du module externe Dolibarr Chorus Pro.
 - Permissions minimales du module.
 - Fichiers de traduction français et anglais.
 - Fichiers SQL initiaux pour les futures tables de soumission et de logs.
+- Classes internes de base sans logique Chorus Pro réelle.
 
 Aucune logique d'appel à Chorus Pro n'est implémentée à ce stade.
