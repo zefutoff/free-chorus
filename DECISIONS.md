@@ -421,3 +421,31 @@ Aucune fonctionnalité ne doit implémenter plusieurs de ces couches dans une m�
 - faciliter les tests ;
 - limiter les régressions ;
 - permettre des commits atomiques.
+
+# AD-014
+
+## Toute intégration externe doit disposer d'un outil de diagnostic
+
+Statut
+
+Accepté
+
+### Décision
+
+Toute communication avec un service externe devra être testable depuis
+l'interface d'administration du module.
+
+Le module fournira une page de diagnostic permettant de vérifier
+progressivement les différentes briques techniques.
+
+### Raisons
+
+- simplifier le support ;
+- faciliter les tests ;
+- réduire les rapports de bugs incomplets ;
+- permettre à un administrateur de diagnostiquer un problème sans accès SSH.
+
+### Conséquences
+
+Chaque nouvelle couche d'intégration devra ajouter un test correspondant
+dans la page Diagnostics.
