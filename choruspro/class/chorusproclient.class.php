@@ -69,6 +69,20 @@ class ChorusProClient
     protected $accessTokenExpiresAt = 0;
 
     /**
+     * Last OAuth HTTP status code, safe for diagnostics.
+     *
+     * @var int
+     */
+    protected $lastOAuthHttpCode = 0;
+
+    /**
+     * Last sanitized OAuth error body, safe for diagnostics.
+     *
+     * @var string
+     */
+    protected $lastOAuthErrorBody = '';
+
+    /**
      * Constructor.
      *
      * @param DoliDB|null   $db         Database handler
@@ -149,7 +163,10 @@ class ChorusProClient
             'method' => self::OAUTH_HTTP_METHOD,
             'client_id_configured' => $this->getConfigValue('CHORUSPRO_CLIENT_ID') !== '',
             'client_secret_configured' => $this->getConfigValue('CHORUSPRO_CLIENT_SECRET') !== '',
+            'scope' => self::DEFAULT_SCOPE,
             'content_type' => self::OAUTH_CONTENT_TYPE,
+            'http_code' => $this->lastOAuthHttpCode,
+            'error_body' => $this->lastOAuthErrorBody,
         );
     }
 
@@ -320,6 +337,9 @@ class ChorusProClient
      */
     protected function sendTokenRequest($tokenUrl, array $payload)
     {
+        $this->lastOAuthHttpCode = 0;
+        $this->lastOAuthErrorBody = '';
+
         $httpClient = $this->httpClient;
         if (!is_callable($httpClient)) {
             $httpClient = array($this, 'executeHttpRequest');
@@ -385,8 +405,10 @@ class ChorusProClient
     {
         $httpCode = empty($response['http_code']) ? 0 : (int) $response['http_code'];
         $body = isset($response['body']) ? (string) $response['body'] : '';
+        $this->lastOAuthHttpCode = $httpCode;
 
         if ($httpCode < 200 || $httpCode >= 300) {
+            $this->lastOAuthErrorBody = $this->sanitizeOAuthErrorBody($body);
             $message = $this->extractOAuthErrorMessage($body);
             if ($message !== '') {
                 throw new RuntimeException('PISTE OAuth authentication failed with HTTP status ' . $httpCode . ': ' . $message);
@@ -423,6 +445,33 @@ class ChorusProClient
         }
 
         return '';
+    }
+
+    /**
+     * Sanitize a PISTE OAuth error body before diagnostic display.
+     *
+     * @param string $body HTTP response body
+     * @return string Sanitized body
+     */
+    protected function sanitizeOAuthErrorBody($body)
+    {
+        if ($body === '') {
+            return '';
+        }
+
+        $decoded = json_decode($body, true);
+        if (is_array($decoded)) {
+            $safeBody = array();
+            foreach ($decoded as $key => $value) {
+                if (is_scalar($value) || $value === null) {
+                    $safeBody[$key] = $this->sanitizeDiagnosticMessage((string) $value);
+                }
+            }
+
+            return json_encode($safeBody);
+        }
+
+        return $this->sanitizeDiagnosticMessage(substr($body, 0, 500));
     }
 
     /**

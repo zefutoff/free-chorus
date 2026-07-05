@@ -15,3 +15,4 @@ Le format suit l'esprit de Keep a Changelog et ce fichier racine est la référe
 - Implémentation de l’authentification OAuth 2.0 PISTE avec cache mémoire du jeton.
 - Ajout du centre de diagnostic technique du module Chorus Pro.
 - Amélioration du diagnostic OAuth PISTE avec contexte sûr et erreurs HTTP détaillées.
+- Ajout du code HTTP, du scope et du body d’erreur nettoyé au diagnostic OAuth PISTE.

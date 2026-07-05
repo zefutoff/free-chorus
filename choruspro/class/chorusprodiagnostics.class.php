@@ -460,9 +460,12 @@ class ChorusProDiagnostics
     {
         $startedAt = microtime(true);
         $client = new ChorusProClient($this->db);
+        $context = $client->getOAuthDiagnosticContext();
 
         try {
             $client->authenticate();
+            $context = $client->getOAuthDiagnosticContext();
+            $safeDetail = $this->formatOAuthDiagnosticContext($context);
             $responseTime = (int) round((microtime(true) - $startedAt) * 1000);
             $expiresIn = $client->getAccessTokenExpiresIn();
 
@@ -472,10 +475,12 @@ class ChorusProDiagnostics
                 'Authentification OAuth PISTE',
                 'Appelle uniquement ChorusProClient::authenticate().',
                 self::STATE_SUCCESS,
-                'Token obtenu. Temps de réponse : ' . $responseTime . ' ms. Expiration : ' . $expiresIn . ' secondes.',
-                array('response_time_ms' => $responseTime, 'expires_in' => $expiresIn)
+                $safeDetail . ' Token obtenu. Temps de réponse : ' . $responseTime . ' ms. Expiration : ' . $expiresIn . ' secondes.',
+                array_merge($context, array('response_time_ms' => $responseTime, 'expires_in' => $expiresIn))
             );
         } catch (Throwable $exception) {
+            $context = $client->getOAuthDiagnosticContext();
+            $safeDetail = $this->formatOAuthDiagnosticContext($context);
             $responseTime = (int) round((microtime(true) - $startedAt) * 1000);
 
             return $this->buildResult(
@@ -484,8 +489,8 @@ class ChorusProDiagnostics
                 'Authentification OAuth PISTE',
                 'Appelle uniquement ChorusProClient::authenticate().',
                 self::STATE_ERROR,
-                $this->sanitizeErrorMessage($exception->getMessage()) . ' Temps de réponse : ' . $responseTime . ' ms.',
-                array('response_time_ms' => $responseTime)
+                $safeDetail . $this->sanitizeErrorMessage($exception->getMessage()) . ' Temps de réponse : ' . $responseTime . ' ms.',
+                array_merge($context, array('response_time_ms' => $responseTime))
             );
         }
     }
@@ -634,6 +639,50 @@ class ChorusProDiagnostics
         );
 
         return preg_replace($patterns, '********', $message);
+    }
+
+    /**
+     * Format safe OAuth diagnostic metadata for display.
+     *
+     * @param array $context Safe OAuth context
+     * @return string Human-readable detail
+     */
+    protected function formatOAuthDiagnosticContext(array $context)
+    {
+        $clientId = !empty($context['client_id_configured']) ? 'présent' : 'absent';
+        $clientSecret = !empty($context['client_secret_configured']) ? 'présent' : 'absent';
+
+        return 'Endpoint OAuth : ' . $context['endpoint']
+            . '. Environnement : ' . $context['environment']
+            . '. Méthode HTTP : ' . $context['method']
+            . '. Client ID : ' . $clientId
+            . '. Client Secret : ' . $clientSecret
+            . '. Scope : ' . $context['scope']
+            . '. Content-Type : ' . $context['content_type']
+            . '. Code HTTP : ' . $this->formatOptionalHttpCode($context)
+            . '. Body erreur PISTE : ' . $this->formatOptionalErrorBody($context) . '. ';
+    }
+
+    /**
+     * Format an optional HTTP status code.
+     *
+     * @param array $context Safe OAuth context
+     * @return string Human-readable HTTP code
+     */
+    protected function formatOptionalHttpCode(array $context)
+    {
+        return empty($context['http_code']) ? 'non disponible' : (string) $context['http_code'];
+    }
+
+    /**
+     * Format an optional sanitized PISTE error body.
+     *
+     * @param array $context Safe OAuth context
+     * @return string Human-readable body
+     */
+    protected function formatOptionalErrorBody(array $context)
+    {
+        return empty($context['error_body']) ? 'non disponible' : $context['error_body'];
     }
 
     /**

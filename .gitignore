@@ -615,3 +615,4 @@ composer.lock
 _.css.map
 _.sass.map
 \*.scss.map
+*.zip
