@@ -1,5 +1,4 @@
 <?php
-
 /* Copyright (C) 2026 Free Chorus contributors
  *
  * This program is free software: you can redistribute it and/or modify
@@ -31,6 +30,18 @@ $runOAuth = $action === 'test_oauth';
 $structureSiret = $action === 'test_structure' ? GETPOST('siret', 'alphanohtml') : '';
 $diagnostics = new ChorusProDiagnostics($db, $conf, $user, $_SERVER);
 $results = $diagnostics->runAll($runOAuth, $structureSiret);
+
+if ($action === 'export_diagnostics') {
+    $exportFormat = GETPOST('format', 'aZ09') === 'json' ? 'json' : 'text';
+    $exportContent = $diagnostics->exportReport($results, $exportFormat);
+
+    header('Content-Type: ' . $diagnostics->getExportMimeType($exportFormat));
+    header('Content-Disposition: attachment; filename="' . $diagnostics->getExportFilename($exportFormat) . '"');
+    header('Content-Length: ' . strlen($exportContent));
+    print $exportContent;
+    $db->close();
+    exit;
+}
 
 /**
  * Return display metadata for a diagnostic state.
@@ -72,6 +83,13 @@ print '<input type="hidden" name="action" value="test_structure">';
 print '<label for="choruspro_structure_siret">' . $langs->trans('ChorusProStructureSiret') . '</label> ';
 print '<input id="choruspro_structure_siret" class="flat" type="text" name="siret" maxlength="20" value="' . dol_escape_htmltag($structureSiret) . '" placeholder="11000201100044"> ';
 print '<input class="button" type="submit" value="' . $langs->trans('ChorusProTestStructureSearch') . '">';
+print '</form>';
+print '<br>';
+print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
+print '<input type="hidden" name="token" value="' . newToken() . '">';
+print '<input type="hidden" name="action" value="export_diagnostics">';
+print '<button class="button" type="submit" name="format" value="text">' . $langs->trans('ChorusProExportDiagnosticsText') . '</button> ';
+print '<button class="button" type="submit" name="format" value="json">' . $langs->trans('ChorusProExportDiagnosticsJson') . '</button>';
 print '</form>';
 print '<br>';
 

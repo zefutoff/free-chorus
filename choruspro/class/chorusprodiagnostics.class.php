@@ -1,5 +1,4 @@
 <?php
-
 /* Copyright (C) 2026 Free Chorus contributors
  *
  * This program is free software: you can redistribute it and/or modify
@@ -155,6 +154,47 @@ class ChorusProDiagnostics
         }
 
         return $results;
+    }
+
+    /**
+     * Export a diagnostic report in a safe downloadable format.
+     *
+     * @param array  $results Diagnostics grouped by category
+     * @param string $format  Export format, either text or json
+     * @return string Exported report content
+     */
+    public function exportReport(array $results, $format = 'text')
+    {
+        $report = $this->buildExportReportData($results);
+        if ($format === 'json') {
+            return json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+
+        return $this->formatExportReportAsText($report);
+    }
+
+    /**
+     * Return the MIME type for a diagnostic export format.
+     *
+     * @param string $format Export format
+     * @return string MIME type
+     */
+    public function getExportMimeType($format)
+    {
+        return $format === 'json' ? 'application/json; charset=UTF-8' : 'text/plain; charset=UTF-8';
+    }
+
+    /**
+     * Return the filename for a diagnostic export format.
+     *
+     * @param string $format Export format
+     * @return string Filename
+     */
+    public function getExportFilename($format)
+    {
+        $extension = $format === 'json' ? 'json' : 'txt';
+
+        return 'choruspro-diagnostic-' . date('Ymd-His') . '.' . $extension;
     }
 
     /**
@@ -689,6 +729,143 @@ class ChorusProDiagnostics
     protected function getModuleRoot()
     {
         return $this->getDolDocumentRoot() . '/custom/choruspro';
+    }
+
+    /**
+     * Build safe report data for export.
+     *
+     * @param array $results Diagnostics grouped by category
+     * @return array Safe report data
+     */
+    protected function buildExportReportData(array $results)
+    {
+        return array(
+            'generated_at' => date('c'),
+            'versions' => array(
+                'php' => PHP_VERSION,
+                'dolibarr' => defined('DOL_VERSION') ? DOL_VERSION : 'unknown',
+                'module' => 'development',
+            ),
+            'results' => $this->sanitizeExportResults($results),
+        );
+    }
+
+    /**
+     * Format safe report data as readable text.
+     *
+     * @param array $report Safe report data
+     * @return string Text report
+     */
+    protected function formatExportReportAsText(array $report)
+    {
+        $lines = array(
+            'Rapport de diagnostic Chorus Pro',
+            'Généré le : ' . $report['generated_at'],
+            '',
+            'Versions',
+            '- PHP : ' . $report['versions']['php'],
+            '- Dolibarr : ' . $report['versions']['dolibarr'],
+            '- Module : ' . $report['versions']['module'],
+            '',
+            'Résultats',
+        );
+
+        foreach ($report['results'] as $category => $results) {
+            $lines[] = '';
+            $lines[] = '[' . $category . ']';
+            foreach ($results as $result) {
+                $lines[] = '- ' . $result['state'] . ' - ' . $result['name'];
+                $lines[] = '  Description : ' . $result['description'];
+                $lines[] = '  Détail : ' . $result['detail'];
+            }
+        }
+
+        return implode("\n", $lines) . "\n";
+    }
+
+    /**
+     * Sanitize diagnostic results for export.
+     *
+     * @param array $results Diagnostics grouped by category
+     * @return array Safe results
+     */
+    protected function sanitizeExportResults(array $results)
+    {
+        $safeResults = array();
+        foreach ($results as $category => $categoryResults) {
+            $safeResults[$category] = array();
+            foreach ($categoryResults as $result) {
+                $safeResults[$category][] = array(
+                    'key' => isset($result['key']) ? (string) $result['key'] : '',
+                    'name' => isset($result['name']) ? $this->sanitizeExportText((string) $result['name']) : '',
+                    'description' => isset($result['description']) ? $this->sanitizeExportText((string) $result['description']) : '',
+                    'state' => isset($result['state']) ? (string) $result['state'] : self::STATE_WARNING,
+                    'detail' => isset($result['detail']) ? $this->sanitizeExportText((string) $result['detail']) : '',
+                    'meta' => isset($result['meta']) && is_array($result['meta']) ? $this->sanitizeExportMeta($result['meta']) : array(),
+                );
+            }
+        }
+
+        return $safeResults;
+    }
+
+    /**
+     * Sanitize optional machine-readable metadata for export.
+     *
+     * @param array $meta Metadata
+     * @return array Safe metadata
+     */
+    protected function sanitizeExportMeta(array $meta)
+    {
+        $safeMeta = array();
+        foreach ($meta as $key => $value) {
+            if ($this->isSensitiveExportKey((string) $key)) {
+                continue;
+            }
+
+            if (is_array($value)) {
+                $safeMeta[$key] = $this->sanitizeExportMeta($value);
+                continue;
+            }
+
+            if (is_scalar($value) || $value === null) {
+                $safeMeta[$key] = $this->sanitizeExportText((string) $value);
+            }
+        }
+
+        return $safeMeta;
+    }
+
+    /**
+     * Return whether an export key could reveal credentials or headers.
+     *
+     * @param string $key Metadata key
+     * @return bool True when the key must be omitted from export
+     */
+    protected function isSensitiveExportKey($key)
+    {
+        return (bool) preg_match('/(secret|token|password|authorization|cpro.?account)/i', $key);
+    }
+
+    /**
+     * Sanitize exported text and labels.
+     *
+     * @param string $text Raw text
+     * @return string Sanitized text
+     */
+    protected function sanitizeExportText($text)
+    {
+        $text = $this->sanitizeErrorMessage($text);
+        $replacements = array(
+            '/Header Authorization/i' => 'Header bearer OAuth',
+            '/Header cpro-account/i' => 'Header compte technique',
+            '/Format cpro-account/i' => 'Format compte technique',
+            '/Client Secret/i' => 'Secret client',
+            '/Mot de passe technique/i' => 'Secret technique',
+            '/Mot de passe du compte technique/i' => 'Secret du compte technique',
+        );
+
+        return preg_replace(array_keys($replacements), array_values($replacements), $text);
     }
 
     /**
