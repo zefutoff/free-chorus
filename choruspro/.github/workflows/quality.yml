@@ -1,0 +1,48 @@
+name: Quality
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - develop
+
+jobs:
+  quality:
+    name: PHP ${{ matrix.php-version }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version:
+          - "8.0"
+          - "8.1"
+          - "8.2"
+          - "8.3"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          coverage: none
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Validate composer metadata
+        run: composer validate --strict
+
+      - name: Lint PHP files
+        run: composer lint
+
+      - name: Check coding standards
+        run: composer cs
+
+      - name: Run static analysis
+        run: composer analyse

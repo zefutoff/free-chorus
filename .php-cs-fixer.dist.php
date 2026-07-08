@@ -1,16 +1,18 @@
 <?php
 
 $finder = PhpCsFixer\Finder::create()
-    ->in(__DIR__ . '/htdocs/custom/choruspro')
-    ->name('*.php');
+    ->files()
+    ->name('*.php')
+    ->in(__DIR__ . '/htdocs/custom/choruspro');
 
 return (new PhpCsFixer\Config())
     ->setRiskyAllowed(false)
-    ->setRules([
+    ->setRules(array(
         '@PSR12' => true,
-        'array_syntax' => ['syntax' => 'short'],
+        'array_syntax' => array('syntax' => 'long'),
+        'binary_operator_spaces' => array('default' => 'single_space'),
+        'blank_line_after_opening_tag' => true,
         'no_unused_imports' => true,
         'single_quote' => true,
-        'trailing_comma_in_multiline' => true,
-    ])
+    ))
     ->setFinder($finder);

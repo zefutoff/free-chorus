@@ -19,3 +19,4 @@ Le format suit l'esprit de Keep a Changelog et ce fichier racine est la référe
 - Ajout de la recherche Structures par SIRET dans le client API et dans le centre de diagnostic.
 - Ajout des diagnostics sur les headers `Authorization` et `cpro-account` pour l’appel Structures.
 - Ajout d’un export texte et JSON du rapport de diagnostic avec masquage des données sensibles.
+- Ajout de l’outillage qualité Composer, PHP-CS-Fixer, PHPStan et GitHub Actions.

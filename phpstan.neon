@@ -1,0 +1,18 @@
+parameters:
+    level: 3
+    paths:
+        - htdocs/custom/choruspro
+    bootstrapFiles:
+        - phpstan-bootstrap.php
+    fileExtensions:
+        - php
+    tmpDir: var/phpstan
+    checkMissingIterableValueType: false
+    treatPhpDocTypesAsCertain: false
+    reportUnmatchedIgnoredErrors: false
+    ignoreErrors:
+        - '#Constant MAIN_DB_PREFIX not found#'
+        - '#Constant DOL_URL_ROOT not found#'
+        - '#Function (accessforbidden|dol_escape_htmltag|GETPOST|img_picto|load_fiche_titre|llxFooter|llxHeader|newToken) not found#'
+        - '#Access to property \$rights on mixed#'
+        - '#Access to property \$admin on mixed#'
