@@ -28,8 +28,9 @@ if (!$canDiagnose) {
 
 $action = GETPOST('action', 'aZ09');
 $runOAuth = $action === 'test_oauth';
+$structureSiret = $action === 'test_structure' ? GETPOST('siret', 'alphanohtml') : '';
 $diagnostics = new ChorusProDiagnostics($db, $conf, $user, $_SERVER);
-$results = $diagnostics->runAll($runOAuth);
+$results = $diagnostics->runAll($runOAuth, $structureSiret);
 
 /**
  * Return display metadata for a diagnostic state.
@@ -65,6 +66,14 @@ print '<input type="hidden" name="action" value="test_oauth">';
 print '<input class="button" type="submit" value="' . $langs->trans('ChorusProTestOAuthAuthentication') . '">';
 print '</form>';
 print '<br>';
+print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
+print '<input type="hidden" name="token" value="' . newToken() . '">';
+print '<input type="hidden" name="action" value="test_structure">';
+print '<label for="choruspro_structure_siret">' . $langs->trans('ChorusProStructureSiret') . '</label> ';
+print '<input id="choruspro_structure_siret" class="flat" type="text" name="siret" maxlength="20" value="' . dol_escape_htmltag($structureSiret) . '" placeholder="11000201100044"> ';
+print '<input class="button" type="submit" value="' . $langs->trans('ChorusProTestStructureSearch') . '">';
+print '</form>';
+print '<br>';
 
 $categoryLabels = array(
     ChorusProDiagnostics::CATEGORY_GENERAL => $langs->trans('ChorusProDiagnosticsGeneral'),
@@ -73,6 +82,7 @@ $categoryLabels = array(
     ChorusProDiagnostics::CATEGORY_PERMISSIONS => $langs->trans('ChorusProDiagnosticsPermissions'),
     ChorusProDiagnostics::CATEGORY_INFRASTRUCTURE => $langs->trans('ChorusProDiagnosticsInfrastructure'),
     ChorusProDiagnostics::CATEGORY_OAUTH => $langs->trans('ChorusProDiagnosticsOAuth'),
+    ChorusProDiagnostics::CATEGORY_STRUCTURES => $langs->trans('ChorusProDiagnosticsStructures'),
 );
 
 foreach ($results as $category => $categoryResults) {

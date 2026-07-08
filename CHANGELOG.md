@@ -16,3 +16,5 @@ Le format suit l'esprit de Keep a Changelog et ce fichier racine est la référe
 - Ajout du centre de diagnostic technique du module Chorus Pro.
 - Amélioration du diagnostic OAuth PISTE avec contexte sûr et erreurs HTTP détaillées.
 - Ajout du code HTTP, du scope et du body d’erreur nettoyé au diagnostic OAuth PISTE.
+- Ajout de la recherche Structures par SIRET dans le client API et dans le centre de diagnostic.
+- Ajout des diagnostics sur les headers `Authorization` et `cpro-account` pour l’appel Structures.

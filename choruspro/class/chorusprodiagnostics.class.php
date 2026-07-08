@@ -33,6 +33,7 @@ class ChorusProDiagnostics
     public const CATEGORY_PERMISSIONS = 'permissions';
     public const CATEGORY_INFRASTRUCTURE = 'infrastructure';
     public const CATEGORY_OAUTH = 'oauth';
+    public const CATEGORY_STRUCTURES = 'structures';
 
     /**
      * Database handler.
@@ -79,12 +80,13 @@ class ChorusProDiagnostics
     }
 
     /**
-     * Run all diagnostics, with OAuth authentication optional.
+     * Run all diagnostics, with live API tests optional.
      *
-     * @param bool $includeOAuth Whether the OAuth live authentication test must run
+     * @param bool   $includeOAuth   Whether the OAuth live authentication test must run
+     * @param string $structureSiret SIRET used for the Structure search test
      * @return array Diagnostics grouped by category
      */
-    public function runAll($includeOAuth = false)
+    public function runAll($includeOAuth = false, $structureSiret = '')
     {
         $results = array(
             self::CATEGORY_GENERAL => array(
@@ -123,6 +125,7 @@ class ChorusProDiagnostics
                 $this->testLogWriting(),
             ),
             self::CATEGORY_OAUTH => array(),
+            self::CATEGORY_STRUCTURES => array(),
         );
 
         if ($includeOAuth) {
@@ -135,6 +138,19 @@ class ChorusProDiagnostics
                 'Teste uniquement ChorusProClient::authenticate().',
                 self::STATE_WARNING,
                 'Test non exécuté. Utilisez le bouton dédié pour lancer un appel PISTE.'
+            );
+        }
+
+        if ($structureSiret !== '') {
+            $results[self::CATEGORY_STRUCTURES][] = $this->testStructureSearch($structureSiret);
+        } else {
+            $results[self::CATEGORY_STRUCTURES][] = $this->buildResult(
+                self::CATEGORY_STRUCTURES,
+                'StructureSearch',
+                'Recherche structure par SIRET',
+                'Appelle uniquement l’API Structures via ChorusProClient::searchStructureBySiret().',
+                self::STATE_WARNING,
+                'Test non exécuté. Saisissez un SIRET et utilisez le bouton dédié.'
             );
         }
 
@@ -496,6 +512,61 @@ class ChorusProDiagnostics
     }
 
     /**
+     * Test Chorus Pro Structure search by SIRET.
+     *
+     * @param string $siret SIRET to search
+     * @return array Diagnostic result
+     */
+    public function testStructureSearch($siret)
+    {
+        $startedAt = microtime(true);
+        $client = new ChorusProClient($this->db);
+        $context = $client->getStructureSearchDiagnosticContext();
+
+        try {
+            $result = $client->searchStructureBySiret($siret);
+            $context = $client->getStructureSearchDiagnosticContext();
+            $responseTime = (int) round((microtime(true) - $startedAt) * 1000);
+            $safeDetail = $this->formatStructureDiagnosticContext($context);
+            $state = !empty($result['found']) ? self::STATE_SUCCESS : self::STATE_WARNING;
+            $foundDetail = !empty($result['found']) ? 'Structure trouvée.' : 'Structure non trouvée.';
+            $structureId = empty($result['structure_id']) ? 'non disponible' : $this->sanitizeErrorMessage((string) $result['structure_id']);
+            $businessName = empty($result['business_name']) ? 'non disponible' : $this->sanitizeErrorMessage((string) $result['business_name']);
+
+            return $this->buildResult(
+                self::CATEGORY_STRUCTURES,
+                'StructureSearch',
+                'Recherche structure par SIRET',
+                'Appelle uniquement l’API Structures via ChorusProClient::searchStructureBySiret().',
+                $state,
+                $safeDetail . $foundDetail . ' Identifiant structure : ' . $structureId
+                    . '. Raison sociale : ' . $businessName . '. Temps de réponse : ' . $responseTime . ' ms.',
+                array_merge($context, array(
+                    'response_time_ms' => $responseTime,
+                    'found' => !empty($result['found']),
+                    'structure_id_available' => $structureId !== 'non disponible',
+                    'business_name_available' => $businessName !== 'non disponible',
+                ))
+            );
+        } catch (Throwable $exception) {
+            $context = $client->getStructureSearchDiagnosticContext();
+            $responseTime = (int) round((microtime(true) - $startedAt) * 1000);
+            $safeDetail = $this->formatStructureDiagnosticContext($context);
+
+            return $this->buildResult(
+                self::CATEGORY_STRUCTURES,
+                'StructureSearch',
+                'Recherche structure par SIRET',
+                'Appelle uniquement l’API Structures via ChorusProClient::searchStructureBySiret().',
+                self::STATE_ERROR,
+                $safeDetail . $this->sanitizeErrorMessage($exception->getMessage())
+                    . ' Temps de réponse : ' . $responseTime . ' ms.',
+                array_merge($context, array('response_time_ms' => $responseTime))
+            );
+        }
+    }
+
+    /**
      * Test if a PHP extension is loaded.
      *
      * @param string $key         Diagnostic key
@@ -636,6 +707,9 @@ class ChorusProDiagnostics
             '/CHORUSPRO_CLIENT_SECRET[^ ]*/',
             '/client_secret=[^&\s]*/',
             '/access_token=[^&\s]*/',
+            '/refresh_token=[^&\s]*/',
+            '/authorization:\s*bearer\s+[^\s]+/i',
+            '/authorization:\s*basic\s+[^\s]+/i',
         );
 
         return preg_replace($patterns, '********', $message);
@@ -661,6 +735,37 @@ class ChorusProDiagnostics
             . '. Content-Type : ' . $context['content_type']
             . '. Code HTTP : ' . $this->formatOptionalHttpCode($context)
             . '. Body erreur PISTE : ' . $this->formatOptionalErrorBody($context) . '. ';
+    }
+
+    /**
+     * Format safe Structure search diagnostic metadata for display.
+     *
+     * @param array $context Safe Structure search context
+     * @return string Human-readable detail
+     */
+    protected function formatStructureDiagnosticContext(array $context)
+    {
+        $token = !empty($context['oauth_token_present']) ? 'présent' : 'absent avant appel';
+        $technicalAccount = !empty($context['technical_account_configured']) ? 'présent' : 'absent';
+        $technicalPassword = !empty($context['technical_password_configured']) ? 'présent' : 'absent';
+        $authorizationHeader = !empty($context['authorization_header_present']) ? 'présent' : 'absent';
+        $cproAccountHeader = !empty($context['cpro_account_header_present']) ? 'présent' : 'absent';
+
+        return 'Endpoint Structures : ' . $context['endpoint']
+            . '. Environnement : ' . $context['environment']
+            . '. Méthode HTTP : ' . $context['method']
+            . '. Content-Type : ' . $context['content_type']
+            . '. Accept : ' . $context['accept']
+            . '. Token OAuth en mémoire : ' . $token
+            . '. Compte technique : ' . $technicalAccount
+            . '. Mot de passe technique : ' . $technicalPassword
+            . '. Header Authorization : ' . $authorizationHeader
+            . '. Header cpro-account : ' . $cproAccountHeader
+            . '. Format cpro-account : ' . $context['cpro_account_format']
+            . '. Longueur login technique : ' . (int) $context['technical_account_length']
+            . '. Longueur mot de passe technique : ' . (int) $context['technical_password_length']
+            . '. Code HTTP : ' . $this->formatOptionalHttpCode($context)
+            . '. Body erreur Chorus Pro : ' . $this->formatOptionalErrorBody($context) . '. ';
     }
 
     /**

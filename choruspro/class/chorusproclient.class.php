@@ -32,6 +32,11 @@ class ChorusProClient
     public const OAUTH_CONTENT_TYPE = 'application/x-www-form-urlencoded';
     public const SANDBOX_TOKEN_URL = 'https://sandbox-oauth.piste.gouv.fr/api/oauth/token';
     public const PRODUCTION_TOKEN_URL = 'https://oauth.piste.gouv.fr/api/oauth/token';
+    public const SANDBOX_API_BASE_URL = 'https://sandbox-api.piste.gouv.fr/cpro';
+    public const PRODUCTION_API_BASE_URL = 'https://api.piste.gouv.fr/cpro';
+    public const STRUCTURE_SEARCH_ENDPOINT = '/structures/v1/rechercher';
+    public const API_HTTP_METHOD = 'POST';
+    public const API_CONTENT_TYPE = 'application/json;charset=utf-8';
 
     /**
      * Database handler, kept for future configuration or logging needs.
@@ -81,6 +86,41 @@ class ChorusProClient
      * @var string
      */
     protected $lastOAuthErrorBody = '';
+
+    /**
+     * Last Structures API HTTP status code, safe for diagnostics.
+     *
+     * @var int
+     */
+    protected $lastApiHttpCode = 0;
+
+    /**
+     * Last sanitized Structures API error body, safe for diagnostics.
+     *
+     * @var string
+     */
+    protected $lastApiErrorBody = '';
+
+    /**
+     * Whether the last Structures API request included an Authorization header.
+     *
+     * @var bool
+     */
+    protected $lastApiAuthorizationHeaderPresent = false;
+
+    /**
+     * Whether the last Structures API request included a cpro-account header.
+     *
+     * @var bool
+     */
+    protected $lastApiCproAccountHeaderPresent = false;
+
+    /**
+     * Safe format classification of the last cpro-account header.
+     *
+     * @var string
+     */
+    protected $lastApiCproAccountFormat = 'absent';
 
     /**
      * Constructor.
@@ -192,7 +232,22 @@ class ChorusProClient
      */
     public function searchStructureBySiret($siret)
     {
-        throw new BadMethodCallException('Chorus Pro structure search is not implemented yet.');
+        $normalizedSiret = preg_replace('/\\D/', '', (string) $siret);
+        if (strlen($normalizedSiret) !== 14) {
+            throw new InvalidArgumentException('A valid 14-digit SIRET is required to search a Chorus Pro structure.');
+        }
+
+        $endpoint = $this->getStructureSearchEndpointUrl();
+        $payload = array(
+            'structure' => array(
+                'typeIdentifiantStructure' => 'SIRET',
+                'identifiantStructure' => $normalizedSiret,
+            ),
+        );
+
+        $response = $this->sendStructureSearchRequest($endpoint, $payload);
+
+        return $this->normalizeStructureSearchResponse($response);
     }
 
     /**
@@ -240,6 +295,32 @@ class ChorusProClient
     }
 
     /**
+     * Return safe Structures API diagnostic metadata without exposing secrets.
+     *
+     * @return array Safe diagnostic context
+     */
+    public function getStructureSearchDiagnosticContext()
+    {
+        return array(
+            'endpoint' => $this->getStructureSearchEndpointUrl(),
+            'environment' => $this->getEnvironment(),
+            'method' => self::API_HTTP_METHOD,
+            'content_type' => self::API_CONTENT_TYPE,
+            'accept' => self::API_CONTENT_TYPE,
+            'oauth_token_present' => $this->accessToken !== '',
+            'technical_account_configured' => $this->getConfigValue('CHORUSPRO_TECHNICAL_ACCOUNT') !== '',
+            'technical_password_configured' => $this->getConfigValue('CHORUSPRO_TECHNICAL_PASSWORD') !== '',
+            'authorization_header_present' => $this->lastApiAuthorizationHeaderPresent,
+            'cpro_account_header_present' => $this->lastApiCproAccountHeaderPresent,
+            'cpro_account_format' => $this->lastApiCproAccountFormat,
+            'technical_account_length' => strlen($this->getConfigValue('CHORUSPRO_TECHNICAL_ACCOUNT')),
+            'technical_password_length' => strlen($this->getConfigValue('CHORUSPRO_TECHNICAL_PASSWORD')),
+            'http_code' => $this->lastApiHttpCode,
+            'error_body' => $this->lastApiErrorBody,
+        );
+    }
+
+    /**
      * Return whether the in-memory token can still be reused.
      *
      * @return bool True when the cached token is still valid
@@ -277,6 +358,35 @@ class ChorusProClient
         }
 
         return self::SANDBOX_TOKEN_URL;
+    }
+
+    /**
+     * Resolve the Chorus Pro API base URL from configuration.
+     *
+     * @return string API base URL
+     */
+    protected function getApiBaseUrl()
+    {
+        $configuredApiBaseUrl = $this->getConfigValue('CHORUSPRO_API_BASE_URL');
+        if ($configuredApiBaseUrl !== '') {
+            return rtrim($configuredApiBaseUrl, '/');
+        }
+
+        if ($this->getEnvironment() === self::ENV_PRODUCTION) {
+            return self::PRODUCTION_API_BASE_URL;
+        }
+
+        return self::SANDBOX_API_BASE_URL;
+    }
+
+    /**
+     * Resolve the Structure search endpoint URL.
+     *
+     * @return string Endpoint URL
+     */
+    protected function getStructureSearchEndpointUrl()
+    {
+        return $this->getApiBaseUrl() . self::STRUCTURE_SEARCH_ENDPOINT;
     }
 
     /**
@@ -353,6 +463,85 @@ class ChorusProClient
     }
 
     /**
+     * Send the Structure search request.
+     *
+     * @param string $endpoint Endpoint URL
+     * @param array  $payload  JSON payload
+     * @return array Decoded API response
+     */
+    protected function sendStructureSearchRequest($endpoint, array $payload)
+    {
+        $this->lastApiHttpCode = 0;
+        $this->lastApiErrorBody = '';
+        $this->lastApiAuthorizationHeaderPresent = false;
+        $this->lastApiCproAccountHeaderPresent = false;
+        $this->lastApiCproAccountFormat = 'absent';
+
+        $token = $this->authenticate();
+        $technicalAccount = $this->getRequiredConfigValue('CHORUSPRO_TECHNICAL_ACCOUNT');
+        $technicalPassword = $this->getRequiredConfigValue('CHORUSPRO_TECHNICAL_PASSWORD');
+        $httpClient = $this->httpClient;
+        if (!is_callable($httpClient)) {
+            $httpClient = array($this, 'executeHttpRequest');
+        }
+
+        $headers = array(
+            'Authorization: Bearer ' . $token,
+            'cpro-account: ' . base64_encode($technicalAccount . ':' . $technicalPassword),
+            'Content-Type: ' . self::API_CONTENT_TYPE,
+            'Accept: ' . self::API_CONTENT_TYPE,
+        );
+
+        $this->storeSafeApiHeaderDiagnostics($headers);
+
+        $response = call_user_func($httpClient, self::API_HTTP_METHOD, $endpoint, $headers, json_encode($payload));
+
+        return $this->decodeStructureSearchResponse($response);
+    }
+
+    /**
+     * Store safe diagnostics about API headers without retaining their values.
+     *
+     * @param array $headers HTTP headers
+     * @return void
+     */
+    protected function storeSafeApiHeaderDiagnostics(array $headers)
+    {
+        foreach ($headers as $header) {
+            if (stripos($header, 'Authorization:') === 0) {
+                $this->lastApiAuthorizationHeaderPresent = true;
+                continue;
+            }
+
+            if (stripos($header, 'cpro-account:') === 0) {
+                $this->lastApiCproAccountHeaderPresent = true;
+                $this->lastApiCproAccountFormat = $this->detectCproAccountHeaderFormat($header);
+            }
+        }
+    }
+
+    /**
+     * Detect the cpro-account header format without exposing the encoded value.
+     *
+     * @param string $header cpro-account header line
+     * @return string Header format label
+     */
+    protected function detectCproAccountHeaderFormat($header)
+    {
+        $parts = explode(':', $header, 2);
+        $value = isset($parts[1]) ? trim($parts[1]) : '';
+        if ($value === '') {
+            return 'absent';
+        }
+
+        if (stripos($value, 'Basic ') === 0) {
+            return 'Basic détecté';
+        }
+
+        return 'base64 seul';
+    }
+
+    /**
      * Execute an HTTP request using PHP cURL.
      *
      * @param string $method  HTTP method
@@ -426,6 +615,126 @@ class ChorusProClient
     }
 
     /**
+     * Decode and validate a Structure search response.
+     *
+     * @param array $response HTTP response returned by the HTTP client
+     * @return array Decoded response
+     */
+    protected function decodeStructureSearchResponse(array $response)
+    {
+        $httpCode = empty($response['http_code']) ? 0 : (int) $response['http_code'];
+        $body = isset($response['body']) ? (string) $response['body'] : '';
+        $this->lastApiHttpCode = $httpCode;
+
+        if ($httpCode < 200 || $httpCode >= 300) {
+            $this->lastApiErrorBody = $this->sanitizeOAuthErrorBody($body);
+            $message = $this->extractOAuthErrorMessage($body);
+            if ($message !== '') {
+                throw new RuntimeException('Chorus Pro Structures API failed with HTTP status ' . $httpCode . ': ' . $message);
+            }
+
+            throw new RuntimeException('Chorus Pro Structures API failed with HTTP status ' . $httpCode . '.');
+        }
+
+        $decoded = json_decode($body, true);
+        if (!is_array($decoded)) {
+            throw new RuntimeException('Chorus Pro Structures API returned an invalid JSON response.');
+        }
+
+        if (isset($decoded['codeRetour']) && (string) $decoded['codeRetour'] !== '0') {
+            $message = empty($decoded['libelle']) ? 'Business error without message.' : $this->sanitizeDiagnosticMessage((string) $decoded['libelle']);
+            $this->lastApiErrorBody = $this->sanitizeOAuthErrorBody($body);
+            throw new RuntimeException('Chorus Pro Structures API business error: ' . $message);
+        }
+
+        return $decoded;
+    }
+
+    /**
+     * Normalize a Structure search response for callers and diagnostics.
+     *
+     * @param array $response Decoded API response
+     * @return array Normalized result
+     */
+    protected function normalizeStructureSearchResponse(array $response)
+    {
+        $structure = $this->findFirstStructureCandidate($response);
+        $structureId = $this->findFirstValue($structure, array('idStructureCPP', 'idStructure', 'identifiantStructureCPP'));
+        $businessName = $this->findFirstValue($structure, array('raisonSociale', 'raisonSocialeStructure', 'designationStructure', 'libelleStructure'));
+
+        return array(
+            'found' => !empty($structure) || $structureId !== '' || $businessName !== '',
+            'structure_id' => $structureId,
+            'business_name' => $businessName,
+            'http_code' => $this->lastApiHttpCode,
+            'raw_response' => $response,
+        );
+    }
+
+    /**
+     * Find the most likely structure object in a decoded response.
+     *
+     * @param array $response Decoded response
+     * @return array Structure data or empty array
+     */
+    protected function findFirstStructureCandidate(array $response)
+    {
+        foreach (array('structure', 'listeStructures', 'listeStructure', 'structures') as $key) {
+            if (!empty($response[$key]) && is_array($response[$key])) {
+                if ($this->isSequentialArray($response[$key]) && !empty($response[$key][0]) && is_array($response[$key][0])) {
+                    return $response[$key][0];
+                }
+
+                return $response[$key];
+            }
+        }
+
+        if ($this->findFirstValue($response, array('idStructureCPP', 'idStructure', 'identifiantStructureCPP', 'raisonSociale', 'raisonSocialeStructure', 'designationStructure', 'libelleStructure')) !== '') {
+            return $response;
+        }
+
+        return array();
+    }
+
+    /**
+     * Find the first scalar value matching one of the expected keys.
+     *
+     * @param array $data Data to inspect
+     * @param array $keys Candidate keys
+     * @return string Found value or empty string
+     */
+    protected function findFirstValue(array $data, array $keys)
+    {
+        foreach ($keys as $key) {
+            if (isset($data[$key]) && is_scalar($data[$key])) {
+                return (string) $data[$key];
+            }
+        }
+
+        foreach ($data as $value) {
+            if (is_array($value)) {
+                $found = $this->findFirstValue($value, $keys);
+                if ($found !== '') {
+                    return $found;
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Return whether an array is sequential.
+     *
+     * @param array $data Array to inspect
+     * @return bool True for sequential arrays
+     */
+    protected function isSequentialArray(array $data)
+    {
+        return array_keys($data) === range(0, count($data) - 1);
+    }
+
+    /**
      * Extract a safe error message from a PISTE OAuth JSON error body.
      *
      * @param string $body HTTP response body
@@ -463,6 +772,11 @@ class ChorusProClient
         if (is_array($decoded)) {
             $safeBody = array();
             foreach ($decoded as $key => $value) {
+                if ($this->isSensitiveDiagnosticKey((string) $key)) {
+                    $safeBody[$key] = '********';
+                    continue;
+                }
+
                 if (is_scalar($value) || $value === null) {
                     $safeBody[$key] = $this->sanitizeDiagnosticMessage((string) $value);
                 }
@@ -485,11 +799,33 @@ class ChorusProClient
         $patterns = array(
             '/client_secret=[^&\\s]*/i',
             '/access_token=[^&\\s]*/i',
+            '/refresh_token=[^&\\s]*/i',
+            '/"client_secret"\\s*:\\s*"[^"]*"/i',
+            '/"access_token"\\s*:\\s*"[^"]*"/i',
+            '/"refresh_token"\\s*:\\s*"[^"]*"/i',
             '/authorization:\\s*bearer\\s+[^\\s]+/i',
             '/authorization:\\s*basic\\s+[^\\s]+/i',
         );
 
         return preg_replace($patterns, '********', $message);
+    }
+
+    /**
+     * Return whether a diagnostic key is sensitive.
+     *
+     * @param string $key Diagnostic body key
+     * @return bool True when the key must be masked
+     */
+    protected function isSensitiveDiagnosticKey($key)
+    {
+        return in_array(strtolower($key), array(
+            'client_secret',
+            'access_token',
+            'refresh_token',
+            'token',
+            'authorization',
+            'password',
+        ), true);
     }
 
     /**
