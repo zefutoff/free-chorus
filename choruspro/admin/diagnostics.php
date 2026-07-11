@@ -28,8 +28,10 @@ if (!$canDiagnose) {
 $action = GETPOST('action', 'aZ09');
 $runOAuth = $action === 'test_oauth';
 $structureSiret = $action === 'test_structure' ? GETPOST('siret', 'alphanohtml') : '';
+$servicesStructureId = $action === 'test_services' ? GETPOST('structure_id', 'alphanohtml') : '';
+$servicesSiret = $action === 'test_services' ? GETPOST('services_siret', 'alphanohtml') : '';
 $diagnostics = new ChorusProDiagnostics($db, $conf, $user, $_SERVER);
-$results = $diagnostics->runAll($runOAuth, $structureSiret);
+$results = $diagnostics->runAll($runOAuth, $structureSiret, $servicesStructureId, $servicesSiret);
 
 if ($action === 'export_diagnostics') {
     $exportFormat = GETPOST('format', 'aZ09') === 'json' ? 'json' : 'text';
@@ -87,6 +89,17 @@ print '</form>';
 print '<br>';
 print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
 print '<input type="hidden" name="token" value="' . newToken() . '">';
+print '<input type="hidden" name="action" value="test_services">';
+print '<label for="choruspro_services_structure_id">' . $langs->trans('ChorusProStructureId') . '</label> ';
+print '<input id="choruspro_services_structure_id" class="flat" type="text" name="structure_id" maxlength="20" value="' . dol_escape_htmltag($servicesStructureId) . '"> ';
+print '<span class="opacitymedium">' . $langs->trans('Or') . '</span> ';
+print '<label for="choruspro_services_siret">' . $langs->trans('ChorusProStructureSiret') . '</label> ';
+print '<input id="choruspro_services_siret" class="flat" type="text" name="services_siret" maxlength="20" value="' . dol_escape_htmltag($servicesSiret) . '" placeholder="11000201100044"> ';
+print '<input class="button" type="submit" value="' . $langs->trans('ChorusProTestStructureServices') . '">';
+print '</form>';
+print '<br>';
+print '<form method="POST" action="' . dol_escape_htmltag($_SERVER['PHP_SELF']) . '">';
+print '<input type="hidden" name="token" value="' . newToken() . '">';
 print '<input type="hidden" name="action" value="export_diagnostics">';
 print '<button class="button" type="submit" name="format" value="text">' . $langs->trans('ChorusProExportDiagnosticsText') . '</button> ';
 print '<button class="button" type="submit" name="format" value="json">' . $langs->trans('ChorusProExportDiagnosticsJson') . '</button>';
@@ -101,6 +114,7 @@ $categoryLabels = array(
     ChorusProDiagnostics::CATEGORY_INFRASTRUCTURE => $langs->trans('ChorusProDiagnosticsInfrastructure'),
     ChorusProDiagnostics::CATEGORY_OAUTH => $langs->trans('ChorusProDiagnosticsOAuth'),
     ChorusProDiagnostics::CATEGORY_STRUCTURES => $langs->trans('ChorusProDiagnosticsStructures'),
+    ChorusProDiagnostics::CATEGORY_SERVICES => $langs->trans('ChorusProDiagnosticsServices'),
 );
 
 foreach ($results as $category => $categoryResults) {

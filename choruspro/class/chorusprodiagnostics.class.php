@@ -33,6 +33,7 @@ class ChorusProDiagnostics
     public const CATEGORY_INFRASTRUCTURE = 'infrastructure';
     public const CATEGORY_OAUTH = 'oauth';
     public const CATEGORY_STRUCTURES = 'structures';
+    public const CATEGORY_SERVICES = 'services';
 
     /**
      * Database handler.
@@ -82,10 +83,12 @@ class ChorusProDiagnostics
      * Run all diagnostics, with live API tests optional.
      *
      * @param bool   $includeOAuth   Whether the OAuth live authentication test must run
-     * @param string $structureSiret SIRET used for the Structure search test
+     * @param string $structureSiret     SIRET used for the Structure search test
+     * @param string $servicesStructureId Structure identifier used for the services test
+     * @param string $servicesSiret       SIRET used to resolve a structure before the services test
      * @return array Diagnostics grouped by category
      */
-    public function runAll($includeOAuth = false, $structureSiret = '')
+    public function runAll($includeOAuth = false, $structureSiret = '', $servicesStructureId = '', $servicesSiret = '')
     {
         $results = array(
             self::CATEGORY_GENERAL => array(
@@ -125,6 +128,7 @@ class ChorusProDiagnostics
             ),
             self::CATEGORY_OAUTH => array(),
             self::CATEGORY_STRUCTURES => array(),
+            self::CATEGORY_SERVICES => array(),
         );
 
         if ($includeOAuth) {
@@ -150,6 +154,19 @@ class ChorusProDiagnostics
                 'Appelle uniquement l’API Structures via ChorusProClient::searchStructureBySiret().',
                 self::STATE_WARNING,
                 'Test non exécuté. Saisissez un SIRET et utilisez le bouton dédié.'
+            );
+        }
+
+        if ($servicesStructureId !== '' || $servicesSiret !== '') {
+            $results[self::CATEGORY_SERVICES][] = $this->testStructureServices($servicesStructureId, $servicesSiret);
+        } else {
+            $results[self::CATEGORY_SERVICES][] = $this->buildResult(
+                self::CATEGORY_SERVICES,
+                'StructureServices',
+                'Codes services structure',
+                'Appelle uniquement l’API Services de structure via ChorusProClient::getServicesByStructure().',
+                self::STATE_WARNING,
+                'Test non exécuté. Saisissez un identifiant structure ou un SIRET.'
             );
         }
 
@@ -607,6 +624,70 @@ class ChorusProDiagnostics
     }
 
     /**
+     * Test Chorus Pro service codes for a Structure.
+     *
+     * @param string $structureId Chorus Pro structure identifier
+     * @param string $siret       Optional SIRET used to resolve the structure identifier
+     * @return array Diagnostic result
+     */
+    public function testStructureServices($structureId = '', $siret = '')
+    {
+        $startedAt = microtime(true);
+        $client = new ChorusProClient($this->db);
+        $resolvedStructureId = trim((string) $structureId);
+
+        try {
+            if ($resolvedStructureId === '' && trim((string) $siret) !== '') {
+                $structure = $client->searchStructureBySiret($siret);
+                $resolvedStructureId = empty($structure['structure_id']) ? '' : (string) $structure['structure_id'];
+                if ($resolvedStructureId === '') {
+                    throw new RuntimeException('Aucun identifiant structure disponible après recherche SIRET.');
+                }
+            }
+
+            $result = $client->getServicesByStructure($resolvedStructureId);
+            $context = $client->getStructureServicesDiagnosticContext();
+            $responseTime = (int) round((microtime(true) - $startedAt) * 1000);
+            $services = isset($result['services']) && is_array($result['services']) ? $result['services'] : array();
+            $state = count($services) > 0 ? self::STATE_SUCCESS : self::STATE_WARNING;
+
+            return $this->buildResult(
+                self::CATEGORY_SERVICES,
+                'StructureServices',
+                'Codes services structure',
+                'Appelle uniquement l’API Services de structure via ChorusProClient::getServicesByStructure().',
+                $state,
+                $this->formatStructureDiagnosticContext($context)
+                    . 'Identifiant structure : ' . $this->sanitizeErrorMessage($resolvedStructureId)
+                    . '. Code service obligatoire : ' . $this->formatOptionalBoolean($result['service_code_required'])
+                    . '. Services retournés : ' . $this->formatServiceCodes($services)
+                    . '. Temps de réponse : ' . $responseTime . ' ms.',
+                array_merge($context, array(
+                    'response_time_ms' => $responseTime,
+                    'structure_id_available' => $resolvedStructureId !== '',
+                    'service_count' => count($services),
+                    'service_code_required_available' => $result['service_code_required'] !== null,
+                ))
+            );
+        } catch (Throwable $exception) {
+            $context = $client->getStructureServicesDiagnosticContext();
+            $responseTime = (int) round((microtime(true) - $startedAt) * 1000);
+
+            return $this->buildResult(
+                self::CATEGORY_SERVICES,
+                'StructureServices',
+                'Codes services structure',
+                'Appelle uniquement l’API Services de structure via ChorusProClient::getServicesByStructure().',
+                self::STATE_ERROR,
+                $this->formatStructureDiagnosticContext($context)
+                    . $this->sanitizeErrorMessage($exception->getMessage())
+                    . ' Temps de réponse : ' . $responseTime . ' ms.',
+                array_merge($context, array('response_time_ms' => $responseTime))
+            );
+        }
+    }
+
+    /**
      * Test if a PHP extension is loaded.
      *
      * @param string $key         Diagnostic key
@@ -943,6 +1024,64 @@ class ChorusProDiagnostics
             . '. Longueur mot de passe technique : ' . (int) $context['technical_password_length']
             . '. Code HTTP : ' . $this->formatOptionalHttpCode($context)
             . '. Body erreur Chorus Pro : ' . $this->formatOptionalErrorBody($context) . '. ';
+    }
+
+    /**
+     * Format an optional boolean value for diagnostics.
+     *
+     * @param bool|null $value Optional boolean
+     * @return string Human-readable value
+     */
+    protected function formatOptionalBoolean($value)
+    {
+        if ($value === null) {
+            return 'information non disponible';
+        }
+
+        return $value ? 'oui' : 'non';
+    }
+
+    /**
+     * Format returned service codes without exposing sensitive data.
+     *
+     * @param array $services Normalized service rows
+     * @return string Human-readable service list
+     */
+    protected function formatServiceCodes(array $services)
+    {
+        if (empty($services)) {
+            return 'aucun service retourné';
+        }
+
+        $formatted = array();
+        foreach ($services as $service) {
+            $code = empty($service['code']) ? '(sans code)' : $this->sanitizeErrorMessage((string) $service['code']);
+            $label = empty($service['label']) ? '' : ' - ' . $this->sanitizeErrorMessage((string) $service['label']);
+            $active = $this->formatServiceActiveState(isset($service['active']) ? $service['active'] : '');
+            $formatted[] = $code . $label . $active;
+        }
+
+        return implode('; ', $formatted);
+    }
+
+    /**
+     * Format a service activity flag.
+     *
+     * @param string $active Service activity flag
+     * @return string Human-readable activity flag
+     */
+    protected function formatServiceActiveState($active)
+    {
+        if ($active === '') {
+            return '';
+        }
+
+        $value = filter_var($active, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        if ($value === null) {
+            return '';
+        }
+
+        return $value ? ' (actif)' : ' (inactif)';
     }
 
     /**

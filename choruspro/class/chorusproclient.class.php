@@ -1,5 +1,4 @@
 <?php
-
 /* Copyright (C) 2026 Free Chorus contributors
  *
  * This program is free software: you can redistribute it and/or modify
@@ -35,6 +34,7 @@ class ChorusProClient
     public const SANDBOX_API_BASE_URL = 'https://sandbox-api.piste.gouv.fr/cpro';
     public const PRODUCTION_API_BASE_URL = 'https://api.piste.gouv.fr/cpro';
     public const STRUCTURE_SEARCH_ENDPOINT = '/structures/v1/rechercher';
+    public const STRUCTURE_SERVICES_ENDPOINT = '/structures/v1/rechercher/services';
     public const API_HTTP_METHOD = 'POST';
     public const API_CONTENT_TYPE = 'application/json;charset=utf-8';
 
@@ -258,7 +258,21 @@ class ChorusProClient
      */
     public function getServicesByStructure($structureId)
     {
-        throw new BadMethodCallException('Chorus Pro service retrieval is not implemented yet.');
+        $normalizedStructureId = trim((string) $structureId);
+        if ($normalizedStructureId === '' || !ctype_digit($normalizedStructureId)) {
+            throw new InvalidArgumentException('A valid numeric Chorus Pro structure identifier is required to search services.');
+        }
+
+        $payload = array(
+            'idStructure' => (int) $normalizedStructureId,
+            'parametresRechercherServicesStructure' => array(
+                'nbResultatsParPage' => 1000,
+            ),
+        );
+
+        $response = $this->sendStructureSearchRequest($this->getStructureServicesEndpointUrl(), $payload);
+
+        return $this->normalizeStructureServicesResponse($response);
     }
 
     /**
@@ -318,6 +332,19 @@ class ChorusProClient
             'http_code' => $this->lastApiHttpCode,
             'error_body' => $this->lastApiErrorBody,
         );
+    }
+
+    /**
+     * Return safe Structure services API diagnostic metadata without exposing secrets.
+     *
+     * @return array Safe diagnostic context
+     */
+    public function getStructureServicesDiagnosticContext()
+    {
+        $context = $this->getStructureSearchDiagnosticContext();
+        $context['endpoint'] = $this->getStructureServicesEndpointUrl();
+
+        return $context;
     }
 
     /**
@@ -387,6 +414,16 @@ class ChorusProClient
     protected function getStructureSearchEndpointUrl()
     {
         return $this->getApiBaseUrl() . self::STRUCTURE_SEARCH_ENDPOINT;
+    }
+
+    /**
+     * Resolve the Structure services endpoint URL.
+     *
+     * @return string Endpoint URL
+     */
+    protected function getStructureServicesEndpointUrl()
+    {
+        return $this->getApiBaseUrl() . self::STRUCTURE_SERVICES_ENDPOINT;
     }
 
     /**
@@ -672,6 +709,54 @@ class ChorusProClient
     }
 
     /**
+     * Normalize a Structure services response for callers and diagnostics.
+     *
+     * @param array $response Decoded API response
+     * @return array Normalized result
+     */
+    protected function normalizeStructureServicesResponse(array $response)
+    {
+        $services = array();
+        foreach ($this->findServiceCandidates($response) as $service) {
+            $services[] = array(
+                'id' => $this->findFirstValue($service, array('idService', 'serviceId')),
+                'code' => $this->findFirstValue($service, array('codeService', 'code')),
+                'label' => $this->findFirstValue($service, array('libelleService', 'libelle', 'label')),
+                'active' => $this->findFirstValue($service, array('estActif', 'actif', 'active')),
+            );
+        }
+
+        return array(
+            'services' => $services,
+            'service_code_required' => $this->findOptionalBooleanValue($response, array(
+                'estCodeServiceObligatoire',
+                'codeServiceObligatoire',
+                'serviceObligatoire',
+                'serviceRequired',
+            )),
+            'http_code' => $this->lastApiHttpCode,
+            'raw_response' => $response,
+        );
+    }
+
+    /**
+     * Find service rows in a decoded response.
+     *
+     * @param array $response Decoded response
+     * @return array List of service rows
+     */
+    protected function findServiceCandidates(array $response)
+    {
+        foreach (array('listeServices', 'services', 'listeService') as $key) {
+            if (!empty($response[$key]) && is_array($response[$key])) {
+                return $this->isSequentialArray($response[$key]) ? $response[$key] : array($response[$key]);
+            }
+        }
+
+        return array();
+    }
+
+    /**
      * Find the most likely structure object in a decoded response.
      *
      * @param array $response Decoded response
@@ -721,6 +806,33 @@ class ChorusProClient
         }
 
         return '';
+    }
+
+    /**
+     * Find the first boolean-like value matching one of the expected keys.
+     *
+     * @param array $data Data to inspect
+     * @param array $keys Candidate keys
+     * @return bool|null Found value or null when unavailable
+     */
+    protected function findOptionalBooleanValue(array $data, array $keys)
+    {
+        foreach ($keys as $key) {
+            if (array_key_exists($key, $data) && is_scalar($data[$key])) {
+                return filter_var($data[$key], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            }
+        }
+
+        foreach ($data as $value) {
+            if (is_array($value)) {
+                $found = $this->findOptionalBooleanValue($value, $keys);
+                if ($found !== null) {
+                    return $found;
+                }
+            }
+        }
+
+        return null;
     }
 
     /**
