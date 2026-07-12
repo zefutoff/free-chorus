@@ -17,6 +17,7 @@
     "lint": "find htdocs/custom/choruspro -type f -name '*.php' -print0 | xargs -0 -n1 php -l",
     "cs": "php-cs-fixer fix --dry-run --diff --config=.php-cs-fixer.php",
     "cs:fix": "php-cs-fixer fix --config=.php-cs-fixer.php",
-    "analyse": "phpstan analyse --configuration=phpstan.neon"
+    "analyse": "phpstan analyse --configuration=phpstan.neon",
+    "test": "php tests/chorusproinvoiceservice_test.php && php tests/choruspro_extrafields_test.php"
   }
 }
