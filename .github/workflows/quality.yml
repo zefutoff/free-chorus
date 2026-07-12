@@ -41,6 +41,9 @@ jobs:
       - name: Lint PHP files
         run: composer lint
 
+      - name: Run unit tests
+        run: composer test
+
       - name: Check coding standards
         run: composer cs
 

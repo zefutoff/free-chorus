@@ -97,6 +97,38 @@ if (!class_exists('Translate')) {
     }
 }
 
+if (!class_exists('HookManager')) {
+    class HookManager
+    {
+    }
+}
+
+if (!class_exists('Facture')) {
+    class Facture
+    {
+    }
+}
+
+if (!class_exists('ExtraFields')) {
+    class ExtraFields
+    {
+        /**
+         * @param DoliDB|null $db Database handler
+         */
+        public function __construct($db = null)
+        {
+        }
+
+        /**
+         * @return int
+         */
+        public function addExtraField(...$args)
+        {
+            return 1;
+        }
+    }
+}
+
 $GLOBALS['conf'] = new Conf();
 $GLOBALS['user'] = new User();
 $GLOBALS['db'] = new DoliDB();
@@ -141,6 +173,16 @@ if (!function_exists('newToken')) {
     function newToken()
     {
         return 'token';
+    }
+}
+
+if (!function_exists('checkToken')) {
+    /**
+     * @return bool
+     */
+    function checkToken()
+    {
+        return true;
     }
 }
 

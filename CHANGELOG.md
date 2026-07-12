@@ -21,3 +21,4 @@ Le format suit l'esprit de Keep a Changelog et ce fichier racine est la référe
 - Ajout d’un export texte et JSON du rapport de diagnostic avec masquage des données sensibles.
 - Ajout de l’outillage qualité Composer, PHP-CS-Fixer, PHPStan et GitHub Actions.
 - Ajout du diagnostic de récupération des codes services d’une structure Chorus Pro.
+- Ajout de la préparation locale des factures Dolibarr pour Chorus Pro sans envoi ni upload.
